@@ -6,7 +6,7 @@ on:
       IMG_URL:
         description: 'IMG_ URL'
         required: true
-        default: 'https://github.com/KoCleo/Auto-Twrp-Builder/raw/master/recovery.img'
+        default: 'https://github.com/Mietel/Auto-TWRP-Builder/releases/download/ultra-input/recovery-input.zip'
       MANIFEST_URL:
         description: 'MANIFEST_URL (if want to use SSH keys, use git@github.com:XXXXX)'
         required: true
@@ -14,7 +14,7 @@ on:
       MANIFEST_BRANCH:
         description: 'MANIFEST_BRANCH'
         required: true
-        default: 'twrp-8.1'
+        default: 'twrp-12.1'
       BUILD_TARGET:
         description: 'BUILD_TARGET'
         required: true
@@ -95,7 +95,8 @@ jobs:
       working-directory: workspace
     - name: Generate Device Tree
       run: |
-        wget ${{ github.event.inputs.IMG_URL }}
+        wget -O input.zip "${{ github.event.inputs.IMG_URL }}"
+        unzip -o input.zip
         python3 ${GITHUB_WORKSPACE}/scripts/build.py -i *.img -o device
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
       id: gdt
