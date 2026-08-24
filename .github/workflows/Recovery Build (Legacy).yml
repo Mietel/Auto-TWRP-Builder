@@ -99,7 +99,7 @@ jobs:
         unzip -o input.zip
         python3 ${GITHUB_WORKSPACE}/scripts/build.py -i *.img -o device
         # twrpdtgen emits a removed Android build variable on newer manifests.
-        grep -RIl 'PRODUCT_STATIC_BOOT_CONTROL_HAL' device | xargs -r sed -i '/PRODUCT_STATIC_BOOT_CONTROL_HAL/d'
+        grep -RIl 'PRODUCT_STATIC_BOOT_CONTROL_HAL' device | xargs -r sed -i '/PRODUCT_STATIC_BOOT_CONTROL_HAL/,+1d'
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
       id: gdt
 
