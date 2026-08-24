@@ -119,7 +119,11 @@ jobs:
       run: |
         source build/envsetup.sh
         export ALLOW_MISSING_DEPENDENCIES=true
-        lunch ${{ steps.gdt.outputs.MAKEFILE_NAME }}-eng
+        if [[ "${{ github.event.inputs.MANIFEST_BRANCH }}" == twrp-* ]]; then
+          lunch twrp_${{ steps.gdt.outputs.DEVICE_NAME }}-eng
+        else
+          lunch ${{ steps.gdt.outputs.MAKEFILE_NAME }}-eng
+        fi
         make clean
         make ${{ github.event.inputs.BUILD_TARGET }}image -j$(nproc --all)
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
