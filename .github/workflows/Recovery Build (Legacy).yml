@@ -162,8 +162,34 @@ jobs:
         fi
         make ${{ github.event.inputs.BUILD_TARGET }}image -j"$(nproc --all)" 2>&1 | tee build.log
         PRODUCT_OUTPUT="out/target/product/${{ steps.gdt.outputs.MAKEFILE_NAME }}"
-        test -s "$PRODUCT_OUTPUT/${{ github.event.inputs.BUILD_TARGET }}.img"
-        echo "Built image: $PRODUCT_OUTPUT/${{ github.event.inputs.BUILD_TARGET }}.img"
+        IMAGE_PATH="$PRODUCT_OUTPUT/${{ github.event.inputs.BUILD_TARGET }}.img"
+        test -s "$IMAGE_PATH"
+        if [[ "${{ github.event.inputs.BUILD_TARGET }}" == "boot" ]]; then
+          PARTITION_SIZE=$(awk '$1 == "BOARD_BOOTIMAGE_PARTITION_SIZE" {print $3; exit}' "$DEVICE_TREE/BoardConfig.mk")
+          python3 - "$IMAGE_PATH" "$PARTITION_SIZE" <<'PY'
+        import struct
+        import sys
+        from pathlib import Path
+
+        image = Path(sys.argv[1])
+        partition_size = int(sys.argv[2]) if sys.argv[2].isdigit() else None
+        data = image.read_bytes()
+        if data[:8] != b"ANDROID!":
+            raise SystemExit("Output is not an Android boot image")
+        page_size = struct.unpack_from("<I", data, 36)[0]
+        header_version = struct.unpack_from("<I", data, 40)[0]
+        if page_size != 2048:
+            raise SystemExit(f"Unexpected boot page size: {page_size}")
+        if header_version != 2:
+            raise SystemExit(f"Unexpected boot header version: {header_version}")
+        if partition_size is not None and image.stat().st_size > partition_size:
+            raise SystemExit(
+                f"Image is {image.stat().st_size} bytes, boot partition is {partition_size} bytes"
+            )
+        print(f"Validated Android boot image: {image} ({image.stat().st_size} bytes)")
+        PY
+        fi
+        echo "Built image: $IMAGE_PATH"
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
 
     - name: Upload build diagnostics

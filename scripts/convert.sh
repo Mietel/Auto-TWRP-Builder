@@ -1,15 +1,16 @@
 #!/bin/bash
+set -euo pipefail
 
-if [ -n "$1" ] && [ -e $1 ]; then
+if [ -n "${1:-}" ] && [ -e "$1" ]; then
 	file=$1
 else
-	echo " ** Input File : $1 does not exist"
+	echo " ** Input File : ${1:-} does not exist"
 	echo " ** Please specify the correct dependencies file"
 	echo " ** Usage : bash <path-to-script> <path-to-dependencies-file> [<path-to-local-manifest>]"
 	exit 1
 fi
 
-if [ -n "$2" ]; then
+if [ -n "${2:-}" ]; then
 	manifest_path="$2"
 elif [ -e .repo ]; then
 	mkdir -p .repo/local_manifests
@@ -23,23 +24,28 @@ else
 fi
 
 
-if [ -e $manifest_path ]; then
-	sed -i 's@</manifest>@@g' $manifest_path
+if [ -e "$manifest_path" ]; then
+	sed -i 's@</manifest>@@g' "$manifest_path"
 else
-	echo "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" > $manifest_path
-	echo "<manifest>" >> $manifest_path
+	echo "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" > "$manifest_path"
+	echo "<manifest>" >> "$manifest_path"
 fi
 
 vars=( "remote" "repository" "target_path" "branch" "revision")
+declare -a remote_val=()
+declare -a repository_val=()
+declare -a target_path_val=()
+declare -a branch_val=()
+declare -a revision_val=()
 
 for i in ${!vars[@]} ; do
-	value=$(grep "${vars[$i]}" "$file" | cut -d '"' -f4)
+	value=$(grep "${vars[$i]}" "$file" | cut -d '"' -f4 || true)
 	if [ "$value" != "" ]; then
 		declare -a ${vars[$i]}"_val"="( $value )"
 	fi
 done
 
-for i in {0..5}; do
+for i in "${!repository_val[@]}"; do
 	if [ "${repository_val[$i]}" != "" ] && [ "${target_path_val[$i]}" != "" ]; then
 		target_path="path=\"${target_path_val[$i]}\""
 		repository=" name=\"${repository_val[$i]}\""
@@ -51,8 +57,8 @@ for i in {0..5}; do
 		elif [ "${revision_val[$i]}" != "" ]; then
 			revision=" revision=\"${revision_val[$i]}\""
 		fi
-		echo "  <project $target_path$repository$remote_for_repo$revision />" >> $manifest_path
+		echo "  <project $target_path$repository$remote_for_repo$revision />" >> "$manifest_path"
 	fi
 done
 
-echo "</manifest>" >> $manifest_path
+echo "</manifest>" >> "$manifest_path"
