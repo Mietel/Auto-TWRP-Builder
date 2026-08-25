@@ -95,9 +95,16 @@ jobs:
       working-directory: workspace
     - name: Generate Device Tree
       run: |
+        set -euo pipefail
         wget -O input.zip "${{ github.event.inputs.IMG_URL }}"
         unzip -o input.zip
-        python3 ${GITHUB_WORKSPACE}/scripts/build.py -i *.img -o device
+        mapfile -t IMAGES < <(find . -maxdepth 1 -type f -iname '*.img' -print)
+        if [ "${#IMAGES[@]}" -ne 1 ]; then
+          echo "Expected exactly one input image, found ${#IMAGES[@]}:"
+          printf ' - %s\n' "${IMAGES[@]}"
+          exit 1
+        fi
+        python3 ${GITHUB_WORKSPACE}/scripts/build.py -i "${IMAGES[0]}" -o device
         # twrpdtgen emits a removed Android build variable on newer manifests.
         grep -RIl 'PRODUCT_STATIC_BOOT_CONTROL_HAL' device | xargs -r sed -i '/PRODUCT_STATIC_BOOT_CONTROL_HAL/,/^$/d'
         # Convert the generator's legacy Omni product to the TWRP product used by the selected manifest.
@@ -115,6 +122,7 @@ jobs:
 
     - name: Sync Device Dependencies
       run: |
+        set -euo pipefail
         DEPENDENCIES="${{ steps.gdt.outputs.DEVICE_PATH }}/${{ steps.buildtree.outputs.value }}.dependencies"
         if [ -f "$DEPENDENCIES" ]; then
           bash ${GITHUB_WORKSPACE}/scripts/convert.sh "$DEPENDENCIES"
@@ -123,7 +131,6 @@ jobs:
         fi
         repo sync -j$(nproc --all)
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
-      continue-on-error: true
 
     - name: Set Swap Space
       uses: pierotofy/set-swap-space@master
@@ -132,12 +139,14 @@ jobs:
 
     - name: Ensure Guava dependency
       run: |
+        set -euo pipefail
         repo sync -j$(nproc --all) --force-sync external/guava external/jsr305
         test -f external/guava/Android.bp
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
 
     - name: Building recovery
       run: |
+        set -euo pipefail
         source build/envsetup.sh
         export ALLOW_MISSING_DEPENDENCIES=true
         DEVICE_TREE=$(dirname "$(find device -name AndroidProducts.mk -print -quit)")
@@ -152,7 +161,6 @@ jobs:
         else
           lunch "$PRODUCT_NAME-eng"
         fi
-        make clean
         make ${{ github.event.inputs.BUILD_TARGET }}image -j$(nproc --all)
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
 
