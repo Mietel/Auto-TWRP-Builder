@@ -166,13 +166,17 @@ jobs:
         test -s "$IMAGE_PATH"
         if [[ "${{ github.event.inputs.BUILD_TARGET }}" == "boot" ]]; then
           PARTITION_SIZE=$(awk '$1 == "BOARD_BOOTIMAGE_PARTITION_SIZE" {print $3; exit}' "$DEVICE_TREE/BoardConfig.mk")
-          python3 - "$IMAGE_PATH" "$PARTITION_SIZE" <<'PY'
+          STOCK_IMAGE=$(find . -maxdepth 1 -type f -iname '*.img' -print -quit)
+          test -n "$STOCK_IMAGE"
+          python3 - "$STOCK_IMAGE" "$IMAGE_PATH" "$PARTITION_SIZE" <<'PY'
         import struct
         import sys
         from pathlib import Path
 
-        image = Path(sys.argv[1])
-        partition_size = int(sys.argv[2]) if sys.argv[2].isdigit() else None
+        stock_image = Path(sys.argv[1])
+        image = Path(sys.argv[2])
+        partition_size = int(sys.argv[3]) if sys.argv[3].isdigit() else None
+        stock_data = stock_image.read_bytes()
         data = image.read_bytes()
         if data[:8] != b"ANDROID!":
             raise SystemExit("Output is not an Android boot image")
@@ -186,7 +190,16 @@ jobs:
             raise SystemExit(
                 f"Image is {image.stat().st_size} bytes, boot partition is {partition_size} bytes"
             )
-        print(f"Validated Android boot image: {image} ({image.stat().st_size} bytes)")
+        stock_has_avb = len(stock_data) >= 64 and stock_data[-64:-60] == b"AVBf"
+        output_has_avb = len(data) >= 64 and data[-64:-60] == b"AVBf"
+        if stock_has_avb != output_has_avb:
+            raise SystemExit(
+                f"AVB footer mismatch: stock={stock_has_avb}, output={output_has_avb}"
+            )
+        print(
+            f"Validated Android boot image: {image} ({image.stat().st_size} bytes); "
+            f"AVB footer preserved={output_has_avb}"
+        )
         PY
         fi
         echo "Built image: $IMAGE_PATH"
