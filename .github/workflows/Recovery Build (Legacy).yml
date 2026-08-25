@@ -142,13 +142,6 @@ jobs:
       with:
         swap-size-gb: 12
 
-    - name: Ensure Guava dependency
-      run: |
-        set -euo pipefail
-        repo sync -j$(nproc --all) --force-sync external/guava external/jsr305
-        test -f external/guava/Android.bp
-      working-directory: ${{ steps.pwd.outputs.workspace-folder }}
-
     - name: Building recovery
       run: |
         set -euo pipefail
