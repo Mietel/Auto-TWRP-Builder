@@ -133,8 +133,9 @@ jobs:
 
     - name: Building recovery
       run: |
-        set -euo pipefail
+        set -eo pipefail
         source build/envsetup.sh
+        set -u
         export ALLOW_MISSING_DEPENDENCIES=true
         export BUILD_BROKEN_MISSING_REQUIRED_MODULES=true
         export SOONG_ALLOW_MISSING_DEPENDENCIES=true
