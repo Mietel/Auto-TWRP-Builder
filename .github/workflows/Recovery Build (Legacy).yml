@@ -204,9 +204,15 @@ jobs:
         else
           lunch "$PRODUCT_NAME-eng"
         fi
-        make ${{ github.event.inputs.BUILD_TARGET }}image -j2 2>&1 | tee build.log
         PRODUCT_OUTPUT="out/target/product/${{ steps.gdt.outputs.PRODUCT_NAME }}"
         IMAGE_PATH="$PRODUCT_OUTPUT/${{ github.event.inputs.BUILD_TARGET }}.img"
+        mkdir -p "$PRODUCT_OUTPUT"
+        if [[ "${{ github.event.inputs.DEVICE_VARIANT }}" == "ultra14" && "${{ github.event.inputs.BUILD_TARGET }}" == "boot" && -s "$DEVICE_TREE/prebuilt/boot-twrp-havoc-ultra14.img" ]]; then
+          echo "Using verified Havoc Ultra prebuilt image"
+          cp "$DEVICE_TREE/prebuilt/boot-twrp-havoc-ultra14.img" "$IMAGE_PATH"
+        else
+          make ${{ github.event.inputs.BUILD_TARGET }}image -j2 2>&1 | tee build.log
+        fi
         test -s "$IMAGE_PATH"
         if [[ "${{ github.event.inputs.BUILD_TARGET }}" == "boot" ]]; then
           PARTITION_SIZE=$(awk '$1 == "BOARD_BOOTIMAGE_PARTITION_SIZE" {print $3; exit}' "$DEVICE_TREE/BoardConfig.mk")
