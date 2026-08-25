@@ -53,6 +53,17 @@ jobs:
       with:
         distribution: 'zulu'
         java-version: '8'
+    - name: Configure build memory
+      run: |
+        set -euo pipefail
+        if ! swapon --show=NAME | grep -qx '/swapfile'; then
+          sudo fallocate -l 8G /swapfile
+          sudo chmod 600 /swapfile
+          sudo mkswap /swapfile
+          sudo swapon /swapfile
+        fi
+        free -h
+        swapon --show
 
     - name: Setup SSH Keys
       if: ${{ startsWith(github.event.inputs.MANIFEST_URL, 'git@github.com') }}
@@ -151,7 +162,7 @@ jobs:
         else
           lunch "$PRODUCT_NAME-eng"
         fi
-        make ${{ github.event.inputs.BUILD_TARGET }}image -j"$(nproc --all)" 2>&1 | tee build.log
+        make ${{ github.event.inputs.BUILD_TARGET }}image -j2 2>&1 | tee build.log
         PRODUCT_OUTPUT="out/target/product/${{ steps.gdt.outputs.MAKEFILE_NAME }}"
         IMAGE_PATH="$PRODUCT_OUTPUT/${{ github.event.inputs.BUILD_TARGET }}.img"
         test -s "$IMAGE_PATH"
