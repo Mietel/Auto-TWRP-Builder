@@ -101,7 +101,8 @@ jobs:
         # twrpdtgen emits a removed Android build variable on newer manifests.
         grep -RIl 'PRODUCT_STATIC_BOOT_CONTROL_HAL' device | xargs -r sed -i '/PRODUCT_STATIC_BOOT_CONTROL_HAL/,/^$/d'
         # Convert the generator's legacy Omni product to the TWRP product used by the selected manifest.
-        DEVICE_TREE="${{ steps.gdt.outputs.DEVICE_PATH }}"
+        DEVICE_TREE=$(dirname "$(find device -name AndroidProducts.mk -print -quit)")
+        test -n "$DEVICE_TREE" && test -f "$DEVICE_TREE/AndroidProducts.mk"
         for f in "$DEVICE_TREE"/omni_*.mk; do
           [ -e "$f" ] || continue
           mv "$f" "${f/omni_/twrp_}"
@@ -128,11 +129,15 @@ jobs:
       run: |
         source build/envsetup.sh
         export ALLOW_MISSING_DEPENDENCIES=true
+        DEVICE_TREE=$(dirname "$(find device -name AndroidProducts.mk -print -quit)")
+        PRODUCT_NAME=$(sed -n 's|.*$(LOCAL_DIR)/\([^[:space:]]*\)\.mk.*|\1|p' "$DEVICE_TREE/AndroidProducts.mk" | head -n 1)
+        test -n "$PRODUCT_NAME"
         if [[ "${{ github.event.inputs.MANIFEST_BRANCH }}" == twrp-* ]]; then
-          DEVICE_TREE="${{ steps.pwd.outputs.workspace-folder }}/${{ steps.gdt.outputs.DEVICE_PATH }}"
-          PRODUCT_NAME=$(sed -n 's|.*$(LOCAL_DIR)/\([^[:space:]]*\)\.mk.*|\1|p' "$DEVICE_TREE/AndroidProducts.mk" | head -n 1)
-          test -n "$PRODUCT_NAME"
-          lunch "$PRODUCT_NAME-ap2a-eng"
+          if [[ "${{ github.event.inputs.MANIFEST_BRANCH }}" == "twrp-14.1" ]]; then
+            lunch "$PRODUCT_NAME-ap2a-eng"
+          else
+            lunch "$PRODUCT_NAME-eng"
+          fi
         else
           lunch "$PRODUCT_NAME-eng"
         fi
