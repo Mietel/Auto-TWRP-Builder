@@ -3,18 +3,26 @@ name: Recovery Build (Legacy)
 on:
   workflow_dispatch:
     inputs:
-      IMG_URL:
-        description: 'IMG_ URL'
+      DEVICE_VARIANT:
+        description: 'Device profile'
         required: true
-        default: 'https://github.com/Mietel/Auto-TWRP-Builder/releases/download/ultra-input/ultra14-input.zip'
+        type: choice
+        options:
+          - ultra14
+          - 18t12
+        default: ultra14
+      IMG_URL:
+        description: 'Optional stock input ZIP override'
+        required: false
+        default: ''
       MANIFEST_URL:
         description: 'MANIFEST_URL (if want to use SSH keys, use git@github.com:XXXXX)'
-        required: true
+        required: false
         default: 'https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp'
       MANIFEST_BRANCH:
-        description: 'MANIFEST_BRANCH'
-        required: true
-        default: 'twrp-14.1'
+        description: 'Optional manifest branch override'
+        required: false
+        default: ''
       BUILD_TARGET:
         description: 'BUILD_TARGET'
         required: true
@@ -34,6 +42,7 @@ jobs:
     - name: Display Run Parameters
       run: |
         echo "::group::User Environment Variables"
+        echo "Device variant: ${{ github.event.inputs.DEVICE_VARIANT }}"
         echo "Manifest URL: ${{ github.event.inputs.MANIFEST_URL }}"
         echo "Manifest Branch: ${{ github.event.inputs.MANIFEST_BRANCH }}"
         echo "Build Target: ${{ github.event.inputs.BUILD_TARGET }}.img"
@@ -81,18 +90,29 @@ jobs:
 
     - name: Initialize repo
       run: |
+        set -euo pipefail
         mkdir workspace
         cd workspace
         echo "workspace-folder=$(pwd)" >> $GITHUB_OUTPUT
+        if [[ "${{ github.event.inputs.DEVICE_VARIANT }}" == "ultra14" ]]; then
+          DEFAULT_BRANCH=twrp-14.1
+        else
+          DEFAULT_BRANCH=twrp-12.1
+        fi
+        MANIFEST_BRANCH="${{ github.event.inputs.MANIFEST_BRANCH }}"
+        if [[ -z "$MANIFEST_BRANCH" ]]; then
+          MANIFEST_BRANCH="$DEFAULT_BRANCH"
+        fi
+        echo "manifest_branch=$MANIFEST_BRANCH" >> $GITHUB_OUTPUT
         git config --global user.name "azwhikaru"
         git config --global user.email "azwhikaru+37921907@github.com"
-        repo init --depth=1 -u ${{ github.event.inputs.MANIFEST_URL }} -b ${{ github.event.inputs.MANIFEST_BRANCH }}
+        repo init --depth=1 -u "${{ github.event.inputs.MANIFEST_URL }}" -b "$MANIFEST_BRANCH"
       id: pwd
 
     - name: Check Build Tree
       id: buildtree
       run: |
-        if [[ "${{ github.event.inputs.MANIFEST_BRANCH }}" == twrp-* ]]; then
+        if [[ "${{ steps.pwd.outputs.manifest_branch }}" == twrp-* ]]; then
           echo "value=twrp" >> "$GITHUB_OUTPUT"
         else
           echo "value=omni" >> "$GITHUB_OUTPUT"
@@ -106,7 +126,31 @@ jobs:
     - name: Generate Device Tree
       run: |
         set -euo pipefail
-        wget -O input.zip "${{ github.event.inputs.IMG_URL }}"
+        case "${{ github.event.inputs.DEVICE_VARIANT }}" in
+          ultra14)
+            DEFAULT_IMG_URL=https://github.com/Mietel/Auto-TWRP-Builder/releases/download/ultra-input/ultra14-input.zip
+            TREE_REPO=https://github.com/Mietel/Power_Armor_18T_Ultra.git
+            DEVICE_TREE=device/ulefone/Power_Armor_18T_Ultra
+            PRODUCT_NAME=Power_Armor_18T_Ultra
+            MAKEFILE_NAME=twrp_Power_Armor_18T_Ultra
+            ;;
+          18t12)
+            DEFAULT_IMG_URL=https://github.com/Mietel/Auto-TWRP-Builder/releases/download/18t-input/18t-input.zip
+            TREE_REPO=https://github.com/Mietel/Power_Armor_18T.git
+            DEVICE_TREE=device/ulefone/Power_Armor_18T
+            PRODUCT_NAME=Power_Armor_18T
+            MAKEFILE_NAME=twrp_Power_Armor_18T
+            ;;
+          *)
+            echo "Unknown DEVICE_VARIANT"
+            exit 1
+            ;;
+        esac
+        IMG_URL="${{ github.event.inputs.IMG_URL }}"
+        if [[ -z "$IMG_URL" ]]; then
+          IMG_URL="$DEFAULT_IMG_URL"
+        fi
+        wget -O input.zip "$IMG_URL"
         unzip -o input.zip
         mapfile -t IMAGES < <(find . -maxdepth 1 -type f -iname '*.img' -print)
         if [ "${#IMAGES[@]}" -ne 1 ]; then
@@ -114,18 +158,16 @@ jobs:
           printf ' - %s\n' "${IMAGES[@]}"
           exit 1
         fi
-        git clone --depth=1 https://github.com/Mietel/Power_Armor_18T_Ultra.git \
-          device/ulefone/Power_Armor_18T_Ultra
-        DEVICE_TREE=device/ulefone/Power_Armor_18T_Ultra
+        git clone --depth=1 "$TREE_REPO" "$DEVICE_TREE"
         test -f "$DEVICE_TREE/AndroidProducts.mk"
         test -f "$DEVICE_TREE/BoardConfig.mk"
         test -s "$DEVICE_TREE/prebuilt/kernel"
         test -s "$DEVICE_TREE/prebuilt/dtb.img"
-        grep -q 'twrp_Power_Armor_18T_Ultra' "$DEVICE_TREE/AndroidProducts.mk"
+        grep -q "$MAKEFILE_NAME" "$DEVICE_TREE/AndroidProducts.mk"
         grep -q 'TARGET_PREBUILT_KERNEL' "$DEVICE_TREE/BoardConfig.mk"
         echo "DEVICE_NAME=ulefone" >> "$GITHUB_OUTPUT"
-        echo "PRODUCT_NAME=Power_Armor_18T_Ultra" >> "$GITHUB_OUTPUT"
-        echo "MAKEFILE_NAME=twrp_Power_Armor_18T_Ultra" >> "$GITHUB_OUTPUT"
+        echo "PRODUCT_NAME=$PRODUCT_NAME" >> "$GITHUB_OUTPUT"
+        echo "MAKEFILE_NAME=$MAKEFILE_NAME" >> "$GITHUB_OUTPUT"
         echo "DEVICE_PATH=$DEVICE_TREE" >> "$GITHUB_OUTPUT"
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
       id: gdt
@@ -153,8 +195,8 @@ jobs:
         test -f "$DEVICE_TREE/AndroidProducts.mk"
         PRODUCT_NAME=$(sed -n 's|.*$(LOCAL_DIR)/\([^[:space:]]*\)\.mk.*|\1|p' "$DEVICE_TREE/AndroidProducts.mk" | head -n 1)
         test -n "$PRODUCT_NAME"
-        if [[ "${{ github.event.inputs.MANIFEST_BRANCH }}" == twrp-* ]]; then
-          if [[ "${{ github.event.inputs.MANIFEST_BRANCH }}" == "twrp-14.1" ]]; then
+        if [[ "${{ steps.pwd.outputs.manifest_branch }}" == twrp-* ]]; then
+          if [[ "${{ steps.pwd.outputs.manifest_branch }}" == "twrp-14.1" ]]; then
             lunch "$PRODUCT_NAME-ap2a-eng"
           else
             lunch "$PRODUCT_NAME-eng"
