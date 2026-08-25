@@ -100,6 +100,15 @@ jobs:
         python3 ${GITHUB_WORKSPACE}/scripts/build.py -i *.img -o device
         # twrpdtgen emits a removed Android build variable on newer manifests.
         grep -RIl 'PRODUCT_STATIC_BOOT_CONTROL_HAL' device | xargs -r sed -i '/PRODUCT_STATIC_BOOT_CONTROL_HAL/,/^$/d'
+        # Convert the generator's legacy Omni product to the TWRP product used by the selected manifest.
+        DEVICE_TREE="${{ steps.gdt.outputs.DEVICE_PATH }}"
+        for f in "$DEVICE_TREE"/omni_*.mk; do
+          [ -e "$f" ] || continue
+          mv "$f" "${f/omni_/twrp_}"
+        done
+        find "$DEVICE_TREE" -type f -print0 | xargs -0 sed -i \
+          -e 's/omni_/twrp_/g' \
+          -e 's@vendor/omni@vendor/twrp@g'
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
       id: gdt
 
