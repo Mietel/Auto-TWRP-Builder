@@ -26,6 +26,10 @@ jobs:
     runs-on: ubuntu-22.04
     permissions:
       contents: write
+    env:
+      ALLOW_MISSING_DEPENDENCIES: 'true'
+      BUILD_BROKEN_MISSING_REQUIRED_MODULES: 'true'
+      SOONG_ALLOW_MISSING_DEPENDENCIES: 'true'
     steps:
     - name: Display Run Parameters
       run: |
@@ -81,12 +85,13 @@ jobs:
       id: pwd
 
     - name: Check Build Tree
-      uses: haya14busa/action-cond@v1
       id: buildtree
-      with:
-        cond: ${{ github.event.inputs.MANIFEST_BRANCH == 'twrp-11' || github.event.inputs.MANIFEST_BRANCH == 'twrp-12.1' || github.event.inputs.MANIFEST_BRANCH == 'twrp-14.1' }}
-        if_true: twrp
-        if_false: omni
+      run: |
+        if [[ "${{ github.event.inputs.MANIFEST_BRANCH }}" == twrp-* ]]; then
+          echo "value=twrp" >> "$GITHUB_OUTPUT"
+        else
+          echo "value=omni" >> "$GITHUB_OUTPUT"
+        fi
 
 
     - name: Repo Sync
@@ -149,6 +154,8 @@ jobs:
         set -euo pipefail
         source build/envsetup.sh
         export ALLOW_MISSING_DEPENDENCIES=true
+        export BUILD_BROKEN_MISSING_REQUIRED_MODULES=true
+        export SOONG_ALLOW_MISSING_DEPENDENCIES=true
         DEVICE_TREE=$(dirname "$(find device -name AndroidProducts.mk -print -quit)")
         PRODUCT_NAME=$(sed -n 's|.*$(LOCAL_DIR)/\([^[:space:]]*\)\.mk.*|\1|p' "$DEVICE_TREE/AndroidProducts.mk" | head -n 1)
         test -n "$PRODUCT_NAME"
@@ -161,8 +168,20 @@ jobs:
         else
           lunch "$PRODUCT_NAME-eng"
         fi
-        make ${{ github.event.inputs.BUILD_TARGET }}image -j$(nproc --all)
+        make ${{ github.event.inputs.BUILD_TARGET }}image -j"$(nproc --all)" 2>&1 | tee build.log
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
+
+    - name: Upload build diagnostics
+      if: ${{ failure() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-diagnostics-${{ github.run_id }}
+        if-no-files-found: ignore
+        path: |
+          workspace/build.log
+          workspace/out/soong.log
+          workspace/out/soong/soong.log
+          workspace/out/.ninja_log
 
     - name: Upload to Release
       uses: softprops/action-gh-release@v1
