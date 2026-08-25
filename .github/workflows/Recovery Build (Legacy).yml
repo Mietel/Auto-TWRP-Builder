@@ -115,7 +115,12 @@ jobs:
 
     - name: Sync Device Dependencies
       run: |
-        bash ${GITHUB_WORKSPACE}/scripts/convert.sh ${{ steps.gdt.outputs.DEVICE_PATH }}/${{ steps.buildtree.outputs.value }}.dependencies
+        DEPENDENCIES="${{ steps.gdt.outputs.DEVICE_PATH }}/${{ steps.buildtree.outputs.value }}.dependencies"
+        if [ -f "$DEPENDENCIES" ]; then
+          bash ${GITHUB_WORKSPACE}/scripts/convert.sh "$DEPENDENCIES"
+        else
+          echo "No device dependencies file found; continuing with the manifest dependencies."
+        fi
         repo sync -j$(nproc --all)
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
       continue-on-error: true
@@ -155,14 +160,14 @@ jobs:
       uses: softprops/action-gh-release@v1
       with:
         files: | 
-          workspace/out/target/product/${{ steps.gdt.outputs.DEVICE_NAME }}/${{ github.event.inputs.BUILD_TARGET }}.img
-          workspace/out/target/product/${{ steps.gdt.outputs.DEVICE_NAME }}/*.zip
-          workspace/out/target/product/${{ steps.gdt.outputs.DEVICE_NAME }}/*vendor*.img
-        name: ${{ steps.gdt.outputs.DEVICE_NAME }}-${{ github.run_id }}
+          workspace/out/target/product/${{ steps.gdt.outputs.PRODUCT_NAME }}/${{ github.event.inputs.BUILD_TARGET }}.img
+          workspace/out/target/product/${{ steps.gdt.outputs.PRODUCT_NAME }}/*.zip
+          workspace/out/target/product/${{ steps.gdt.outputs.PRODUCT_NAME }}/*vendor*.img
+        name: ${{ steps.gdt.outputs.PRODUCT_NAME }}-${{ github.run_id }}
         tag_name: ${{ github.run_id }}
         body: |
           Manifest: ${{ github.event.inputs.MANIFEST_BRANCH }}
-          Device: ${{ steps.gdt.outputs.DEVICE_NAME }}
+          Device: ${{ steps.gdt.outputs.PRODUCT_NAME }}
           Target: ${{ github.event.inputs.BUILD_TARGET }}.img
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
