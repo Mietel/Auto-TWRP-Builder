@@ -6,7 +6,7 @@ on:
       IMG_URL:
         description: 'IMG_ URL'
         required: true
-        default: 'https://github.com/Mietel/Auto-TWRP-Builder/releases/download/ultra-input/recovery-input.zip'
+        default: 'https://github.com/Mietel/Auto-TWRP-Builder/releases/download/ultra-input/ultra14-input.zip'
       MANIFEST_URL:
         description: 'MANIFEST_URL (if want to use SSH keys, use git@github.com:XXXXX)'
         required: true
@@ -99,23 +99,23 @@ jobs:
         unzip -o input.zip
         mapfile -t IMAGES < <(find . -maxdepth 1 -type f -iname '*.img' -print)
         if [ "${#IMAGES[@]}" -ne 1 ]; then
-          echo "Expected exactly one input image, found ${#IMAGES[@]}:"
+          echo "Expected exactly one stock input image, found ${#IMAGES[@]}:"
           printf ' - %s\n' "${IMAGES[@]}"
           exit 1
         fi
-        python3 ${GITHUB_WORKSPACE}/scripts/build.py -i "${IMAGES[0]}" -o device
-        # twrpdtgen emits a removed Android build variable on newer manifests.
-        grep -RIl 'PRODUCT_STATIC_BOOT_CONTROL_HAL' device | xargs -r sed -i '/PRODUCT_STATIC_BOOT_CONTROL_HAL/,/^$/d'
-        # Convert the generator's legacy Omni product to the TWRP product used by the selected manifest.
-        DEVICE_TREE=$(dirname "$(find device -name AndroidProducts.mk -print -quit)")
-        test -n "$DEVICE_TREE" && test -f "$DEVICE_TREE/AndroidProducts.mk"
-        for f in "$DEVICE_TREE"/omni_*.mk; do
-          [ -e "$f" ] || continue
-          mv "$f" "${f/omni_/twrp_}"
-        done
-        find "$DEVICE_TREE" -type f -print0 | xargs -0 sed -i \
-          -e 's/omni_/twrp_/g' \
-          -e 's@vendor/omni@vendor/twrp@g'
+        git clone --depth=1 https://github.com/Mietel/Power_Armor_18T_Ultra.git \
+          device/ulefone/Power_Armor_18T_Ultra
+        DEVICE_TREE=device/ulefone/Power_Armor_18T_Ultra
+        test -f "$DEVICE_TREE/AndroidProducts.mk"
+        test -f "$DEVICE_TREE/BoardConfig.mk"
+        test -s "$DEVICE_TREE/prebuilt/kernel"
+        test -s "$DEVICE_TREE/prebuilt/dtb.img"
+        grep -q 'twrp_Power_Armor_18T_Ultra' "$DEVICE_TREE/AndroidProducts.mk"
+        grep -q 'TARGET_PREBUILT_KERNEL' "$DEVICE_TREE/BoardConfig.mk"
+        echo "DEVICE_NAME=ulefone" >> "$GITHUB_OUTPUT"
+        echo "PRODUCT_NAME=Power_Armor_18T_Ultra" >> "$GITHUB_OUTPUT"
+        echo "MAKEFILE_NAME=twrp_Power_Armor_18T_Ultra" >> "$GITHUB_OUTPUT"
+        echo "DEVICE_PATH=$DEVICE_TREE" >> "$GITHUB_OUTPUT"
       working-directory: ${{ steps.pwd.outputs.workspace-folder }}
       id: gdt
 
@@ -138,7 +138,8 @@ jobs:
         export ALLOW_MISSING_DEPENDENCIES=true
         export BUILD_BROKEN_MISSING_REQUIRED_MODULES=true
         export SOONG_ALLOW_MISSING_DEPENDENCIES=true
-        DEVICE_TREE=$(dirname "$(find device -name AndroidProducts.mk -print -quit)")
+        DEVICE_TREE="${{ steps.gdt.outputs.DEVICE_PATH }}"
+        test -f "$DEVICE_TREE/AndroidProducts.mk"
         PRODUCT_NAME=$(sed -n 's|.*$(LOCAL_DIR)/\([^[:space:]]*\)\.mk.*|\1|p' "$DEVICE_TREE/AndroidProducts.mk" | head -n 1)
         test -n "$PRODUCT_NAME"
         if [[ "${{ github.event.inputs.MANIFEST_BRANCH }}" == twrp-* ]]; then
