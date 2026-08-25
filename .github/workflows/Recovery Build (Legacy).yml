@@ -132,7 +132,7 @@ jobs:
           DEVICE_TREE="${{ steps.pwd.outputs.workspace-folder }}/${{ steps.gdt.outputs.DEVICE_PATH }}"
           PRODUCT_NAME=$(sed -n 's|.*$(LOCAL_DIR)/\([^[:space:]]*\)\.mk.*|\1|p' "$DEVICE_TREE/AndroidProducts.mk" | head -n 1)
           test -n "$PRODUCT_NAME"
-          lunch "$PRODUCT_NAME-trunk_staging-eng"
+          lunch "$PRODUCT_NAME-ap2a-eng"
         else
           lunch "$PRODUCT_NAME-eng"
         fi
