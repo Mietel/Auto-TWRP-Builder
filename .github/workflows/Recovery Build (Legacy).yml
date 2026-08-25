@@ -120,7 +120,10 @@ jobs:
         source build/envsetup.sh
         export ALLOW_MISSING_DEPENDENCIES=true
         if [[ "${{ github.event.inputs.MANIFEST_BRANCH }}" == twrp-* ]]; then
-          lunch twrp_${{ steps.gdt.outputs.DEVICE_NAME }}-eng
+          DEVICE_TREE="${{ steps.pwd.outputs.workspace-folder }}/${{ steps.gdt.outputs.DEVICE_PATH }}"
+          PRODUCT_NAME=$(sed -n 's|.*$(LOCAL_DIR)/\([^[:space:]]*\)\.mk.*|\1|p' "$DEVICE_TREE/AndroidProducts.mk" | head -n 1)
+          test -n "$PRODUCT_NAME"
+          lunch "$PRODUCT_NAME" trunk_staging eng
         else
           lunch ${{ steps.gdt.outputs.MAKEFILE_NAME }}-eng
         fi
